@@ -53,7 +53,7 @@ def main():
     with open(manifest_path, "a", newline="") as manifest_file:
         writer = csv.writer(manifest_file)
         if not manifest_exists:
-            writer.writerow(["file_path", "label", "frames", "created_at"])
+            writer.writerow(["file_path", "label", "frames", "source_type", "created_at"])
             
         for csv_file in STATIC_CSVS:
             if not os.path.exists(csv_file):
@@ -87,7 +87,7 @@ def main():
                 sample_path = os.path.join(label_dir, sample_name)
                 
                 np.save(sample_path, seq)
-                writer.writerow([sample_path, label, SEQ_LEN, timestamp])
+                writer.writerow([sample_path, label, SEQ_LEN, "STATIC_CONVERTED", timestamp])
                 
                 total_converted += 1
                 

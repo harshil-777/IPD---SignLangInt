@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 import numpy as np
 import joblib
 from sklearn.model_selection import train_test_split
@@ -22,22 +23,41 @@ def load_sequences(dataset_dir):
     if not os.path.exists(dataset_dir):
         raise FileNotFoundError(f"Dataset folder not found: {dataset_dir}")
 
-    for label in os.listdir(dataset_dir):
-        label_path = os.path.join(dataset_dir, label)
-        if not os.path.isdir(label_path):
-            continue
+    manifest_path = os.path.join(dataset_dir, "manifest.csv")
+    if os.path.exists(manifest_path):
+        print(f"Loading dataset indexed by manifest: {manifest_path}")
+        df = pd.read_csv(manifest_path)
+        for _, row in df.iterrows():
+            file_path = row["file_path"]
+            label = str(row["label"])
 
-        for file_name in os.listdir(label_path):
-            if file_name.endswith(".npy"):
-                file_path = os.path.join(label_path, file_name)
-                seq = np.load(file_path)
+            if not os.path.exists(file_path):
+                continue
 
-                if seq.shape[0] != SEQ_LEN:
-                    print(f"Skipping {file_path}: expected {SEQ_LEN} frames, got {seq.shape[0]}")
-                    continue
+            seq = np.load(file_path)
+            if seq.shape[0] != SEQ_LEN:
+                continue
 
-                X.append(seq)
-                y.append(label)
+            X.append(seq)
+            y.append(label)
+    else:
+        print(f"Manifest not found. Scanning folder structure in '{dataset_dir}'...")
+        for label in os.listdir(dataset_dir):
+            label_path = os.path.join(dataset_dir, label)
+            if not os.path.isdir(label_path):
+                continue
+
+            for file_name in os.listdir(label_path):
+                if file_name.endswith(".npy"):
+                    file_path = os.path.join(label_path, file_name)
+                    seq = np.load(file_path)
+
+                    if seq.shape[0] != SEQ_LEN:
+                        print(f"Skipping {file_path}: expected {SEQ_LEN} frames, got {seq.shape[0]}")
+                        continue
+
+                    X.append(seq)
+                    y.append(label)
 
     if not X:
         raise ValueError("No valid .npy sequence files found in the dataset.")

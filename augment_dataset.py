@@ -1,7 +1,9 @@
 import os
+import csv
 import uuid
 import glob
 import random
+from datetime import datetime
 import numpy as np
 
 DATASET_DIR = "dynamic_dataset"
@@ -66,51 +68,67 @@ def augment_hand_sequence(coords):
 
 def main():
     print(f"Balancing all classes in '{DATASET_DIR}' to {TARGET_SAMPLES} samples...")
-    for label in os.listdir(DATASET_DIR):
-        class_dir = os.path.join(DATASET_DIR, label)
-        if not os.path.isdir(class_dir):
-            continue
+    if not os.path.exists(DATASET_DIR):
+        print(f"Dataset directory '{DATASET_DIR}' not found.")
+        return
+
+    manifest_path = os.path.join(DATASET_DIR, "manifest.csv")
+    manifest_exists = os.path.exists(manifest_path)
+
+    with open(manifest_path, "a", newline="") as manifest_file:
+        writer = csv.writer(manifest_file)
+        if not manifest_exists:
+            writer.writerow(["file_path", "label", "frames", "source_type", "created_at"])
+
+        for label in os.listdir(DATASET_DIR):
+            class_dir = os.path.join(DATASET_DIR, label)
+            if not os.path.isdir(class_dir):
+                continue
+                
+            files = glob.glob(os.path.join(class_dir, "*.npy"))
+            count = len(files)
             
-        files = glob.glob(os.path.join(class_dir, "*.npy"))
-        count = len(files)
-        
-        if count == 0:
-            print(f"Skipping {label} (0 files)")
-            continue
-            
-        if count < TARGET_SAMPLES:
-            needed = TARGET_SAMPLES - count
-            print(f"Class '{label}' has {count} files. Synthesizing {needed} new files...")
-            
-            for _ in range(needed):
-                base_file = random.choice(files)
-                seq = np.load(base_file) # shape (30, 146)
+            if count == 0:
+                print(f"Skipping {label} (0 files)")
+                continue
                 
-                # Split features: Right (0:73), Left (73:146)
-                right_features = seq[:, 0:73]
-                left_features = seq[:, 73:146]
+            if count < TARGET_SAMPLES:
+                needed = TARGET_SAMPLES - count
+                print(f"Class '{label}' has {count} files. Synthesizing {needed} new files...")
                 
-                # Extract coordinates (first 63 values)
-                right_coords = right_features[:, 0:63].reshape(SEQ_LEN, 21, 3)
-                left_coords = left_features[:, 0:63].reshape(SEQ_LEN, 21, 3)
-                
-                # Apply augmentation independently
-                new_right_coords = augment_hand_sequence(right_coords)
-                new_left_coords = augment_hand_sequence(left_coords)
-                
-                # Recalculate full features
-                new_right_features = recalculate_features(new_right_coords)
-                new_left_features = recalculate_features(new_left_coords)
-                
-                # Recombine
-                new_seq = np.concatenate([new_right_features, new_left_features], axis=1) # (30, 146)
-                
-                # Save
-                new_filename = f"{label}_synth_{uuid.uuid4().hex[:8]}.npy"
-                new_filepath = os.path.join(class_dir, new_filename)
-                np.save(new_filepath, new_seq)
-        else:
-            pass # Keep it clean
+                for _ in range(needed):
+                    base_file = random.choice(files)
+                    seq = np.load(base_file) # shape (30, 146)
+                    
+                    # Split features: Right (0:73), Left (73:146)
+                    right_features = seq[:, 0:73]
+                    left_features = seq[:, 73:146]
+                    
+                    # Extract coordinates (first 63 values)
+                    right_coords = right_features[:, 0:63].reshape(SEQ_LEN, 21, 3)
+                    left_coords = left_features[:, 0:63].reshape(SEQ_LEN, 21, 3)
+                    
+                    # Apply augmentation independently
+                    new_right_coords = augment_hand_sequence(right_coords)
+                    new_left_coords = augment_hand_sequence(left_coords)
+                    
+                    # Recalculate full features
+                    new_right_features = recalculate_features(new_right_coords)
+                    new_left_features = recalculate_features(new_left_coords)
+                    
+                    # Recombine
+                    new_seq = np.concatenate([new_right_features, new_left_features], axis=1) # (30, 146)
+                    
+                    # Save
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    new_filename = f"{label}_synth_{uuid.uuid4().hex[:8]}.npy"
+                    new_filepath = os.path.join(class_dir, new_filename)
+                    np.save(new_filepath, new_seq)
+
+                    # Append to manifest
+                    writer.writerow([new_filepath, label, SEQ_LEN, "AUGMENTED", timestamp])
+            else:
+                pass # Keep it clean
 
     print("\nDataset augmentation and balancing complete! All classes have at least 500 samples.")
 

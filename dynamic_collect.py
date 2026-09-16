@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 import cv2
 import mediapipe as mp
 import numpy as np
@@ -94,7 +95,7 @@ with mp_hands.create_from_options(options) as landmarker:
     with open(manifest_path, "a", newline="") as manifest_file:
         writer = csv.writer(manifest_file)
         if not manifest_exists:
-            writer.writerow(["file_path", "label", "frames", "created_at"])
+            writer.writerow(["file_path", "label", "frames", "source_type", "created_at"])
 
         while cap.isOpened():
             ret, frame = cap.read()
@@ -128,7 +129,7 @@ with mp_hands.create_from_options(options) as landmarker:
                 sample_path = os.path.join(label_dir, sample_name)
 
                 np.save(sample_path, np.array(sequence, dtype=np.float32))
-                writer.writerow([sample_path, label, SEQ_LEN, timestamp])
+                writer.writerow([sample_path, label, SEQ_LEN, "LIVE_WEBCAM", timestamp])
                 manifest_file.flush()
 
                 samples_saved += 1
