@@ -1,19 +1,18 @@
-# Byte-compiled / optimized / DLL files
 __pycache__/
+*.pyc
 *.py[cod]
 *$py.class
-
-# Trained models and checkpoints (optional: keep if needed, but usually large)
-*.keras
-*.h5
-*.pkl
-
-# Local virtual environment
+.env
 .venv/
 env/
 venv/
 ENV/
-
-# Temporary / OS files
+*.egg-info/
+.pytest_cache/
+.vscode/
+.idea/
 .DS_Store
 Thumbs.db
+dynamic_dataset/
+dynamic_dataset.zip
+
