@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import cv2
 
+from sign_language.camera import open_camera
 from sign_language.config import PATHS, SEQUENCE
 from sign_language.dataset import SequenceDataset
 from sign_language.landmarker import HandLandmarkerService
@@ -19,7 +20,7 @@ def main() -> None:
 
     dataset = SequenceDataset(root_dir)
 
-    cap = cv2.VideoCapture(0)
+    cap = open_camera(0)
     if not cap.isOpened():
         raise RuntimeError("Could not open webcam.")
 

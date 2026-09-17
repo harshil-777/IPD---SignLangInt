@@ -9,6 +9,7 @@ from collections import deque
 import cv2
 import numpy as np
 
+from sign_language.camera import open_camera
 from sign_language.config import INFERENCE, PATHS, SEQUENCE
 from sign_language.fir import FIRWorkflow
 from sign_language.landmarker import HandLandmarkerService
@@ -41,7 +42,13 @@ class LiveInterpreterApp:
         self._generated_sentence = ""
 
     def run(self) -> None:
-        cap = cv2.VideoCapture(0)
+        cap = open_camera(0)
+        if not cap.isOpened():
+            raise RuntimeError(
+                "Could not open webcam (index 0). It may be in use by another "
+                "app, blocked by OS camera privacy settings, or at a different "
+                "device index."
+            )
         try:
             with self._landmarker:
                 while cap.isOpened():
