@@ -74,6 +74,8 @@ with mp_hands.create_from_options(options) as landmarker:
 
             right_features = [0.0] * 73
             left_features = [0.0] * 73
+            right_present = 0
+            left_present = 0
             hands_detected = False
 
             if results.hand_landmarks:
@@ -87,11 +89,16 @@ with mp_hands.create_from_options(options) as landmarker:
 
                     handedness = results.handedness[idx][0].category_name
                     features = extract_features(hand_landmarks)
-                    
-                    if handedness == 'Right': right_features = features
-                    elif handedness == 'Left': left_features = features
 
-                final_row = right_features + left_features + [label]
+                    if handedness == 'Right':
+                        right_features = features
+                        right_present = 1
+                    elif handedness == 'Left':
+                        left_features = features
+                        left_present = 1
+
+                # Format: 73 right | 1 right_flag | 73 left | 1 left_flag | label
+                final_row = right_features + [right_present] + left_features + [left_present] + [label]
                 writer.writerow(final_row)
                 frames_collected += 1
 

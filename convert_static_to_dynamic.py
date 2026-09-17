@@ -21,14 +21,16 @@ def calculate_angle(v1, v2):
     angle = np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
     return np.degrees(angle)
 
-def process_hand_sequence(base_coords):
+def process_hand_sequence(base_coords, hand_present: int):
     """
-    Given (21, 3) base coordinates for one hand:
-    - If hand is absent (all zeros), returns (30, 73) of zeros.
-    - If present, generates 30 frames with micro-tremor noise on 3D coordinates,
-      re-centers on wrist, normalizes scale, and geometrically recalculates the 10 angles.
+    Given (21, 3) base coordinates for one hand and an explicit presence flag:
+    - If hand_present == 0, returns (SEQ_LEN, 73) of zeros immediately.
+      No noise is ever added to an absent hand — prevents ghost-hand jitter.
+    - If present, generates SEQ_LEN frames with micro-tremor noise on 3D
+      coordinates, re-centers on wrist, normalizes scale, and geometrically
+      recalculates the 10 joint angles from the noisy positions.
     """
-    if np.all(np.isclose(base_coords, 0.0)):
+    if not hand_present:
         return np.zeros((SEQ_LEN, 73), dtype=np.float32)
 
     hand_features = []
@@ -59,18 +61,22 @@ def process_hand_sequence(base_coords):
 
 def augment_sequence(base_features):
     """
-    Takes 146 static features (63 R_coords + 10 R_angles + 63 L_coords + 10 L_angles).
-    Extracts 3D coordinates, applies micro-tremor, and recalculates angles geometrically.
-    Returns (30, 146) sequence.
+    Reads a 148-feature row from a 149-col CSV:
+      cols  0-72  : right hand 73 features
+      col   73    : right_present flag (1 or 0)
+      cols 74-146 : left hand 73 features
+      col  147    : left_present flag  (1 or 0)
+    Returns (SEQ_LEN, 146) sequence.
     """
-    # Extract original 3D coordinates (first 63 values for each hand)
-    right_coords = base_features[0:63].reshape(21, 3)
-    left_coords = base_features[73:136].reshape(21, 3)
+    right_coords   = base_features[0:63].reshape(21, 3)
+    right_present  = int(base_features[73])
+    left_coords    = base_features[74:137].reshape(21, 3)
+    left_present   = int(base_features[147])
 
-    right_seq = process_hand_sequence(right_coords) # (30, 73)
-    left_seq = process_hand_sequence(left_coords)   # (30, 73)
+    right_seq = process_hand_sequence(right_coords, right_present)  # (SEQ_LEN, 73)
+    left_seq  = process_hand_sequence(left_coords,  left_present)   # (SEQ_LEN, 73)
 
-    return np.concatenate([right_seq, left_seq], axis=1).astype(np.float32) # (30, 146)
+    return np.concatenate([right_seq, left_seq], axis=1).astype(np.float32)  # (SEQ_LEN, 146)
 
 def main():
     if not os.path.exists(OUTPUT_DIR):
@@ -98,15 +104,20 @@ def main():
                 
             print(f"Processing {csv_file}...")
             df = pd.read_csv(csv_file, header=None).dropna()
-            
-            # Features are all columns except the last one. Label is the last column.
-            features = df.iloc[:, :-1].apply(pd.to_numeric, errors='coerce').values
-            labels = df.iloc[:, -1].astype(str).values
-            
+
+            if df.shape[1] != 149:
+                print(f"  SKIP {csv_file}: expected 149 columns (73 right + 1 flag + 73 left + 1 flag + label), got {df.shape[1]}.")
+                print(f"  Run backfill_presence_flags.py first to migrate old 147-col CSVs.")
+                continue
+
+            # Layout: 73 right | 1 right_flag | 73 left | 1 left_flag | label
+            features = df.iloc[:, :-1].apply(pd.to_numeric, errors='coerce').values  # cols 0-147
+            labels   = df.iloc[:, -1].astype(str).values                              # col 148
+
             for i in range(len(features)):
-                feat = features[i]
+                feat  = features[i]
                 label = labels[i].strip().upper()
-                
+
                 # Skip invalid rows
                 if np.isnan(feat).any() or not label or label == "NAN":
                     continue
