@@ -1,0 +1,19 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Trained models and checkpoints (optional: keep if needed, but usually large)
+*.keras
+*.h5
+*.pkl
+
+# Local virtual environment
+.venv/
+env/
+venv/
+ENV/
+
+# Temporary / OS files
+.DS_Store
+Thumbs.db

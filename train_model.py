@@ -10,6 +10,7 @@ from tensorflow.keras.layers import LSTM, Dense, Dropout, Bidirectional
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras.optimizers import Adam
+from sync_dataset import sync_manifest
 
 DATASET_DIR = "dynamic_dataset"
 SEQ_LEN = 30
@@ -22,6 +23,9 @@ def load_sequences(dataset_dir):
 
     if not os.path.exists(dataset_dir):
         raise FileNotFoundError(f"Dataset folder not found: {dataset_dir}")
+
+    # Automatically detect and register any new/external .npy files into manifest.csv
+    sync_manifest(dataset_dir, verbose=True)
 
     manifest_path = os.path.join(dataset_dir, "manifest.csv")
     if os.path.exists(manifest_path):

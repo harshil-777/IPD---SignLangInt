@@ -5,6 +5,7 @@ import glob
 import random
 from datetime import datetime
 import numpy as np
+from sync_dataset import sync_manifest
 
 DATASET_DIR = "dynamic_dataset"
 TARGET_SAMPLES = 500
@@ -71,6 +72,9 @@ def main():
     if not os.path.exists(DATASET_DIR):
         print(f"Dataset directory '{DATASET_DIR}' not found.")
         return
+
+    # Sync external/unregistered files first
+    sync_manifest(DATASET_DIR, verbose=True)
 
     manifest_path = os.path.join(DATASET_DIR, "manifest.csv")
     manifest_exists = os.path.exists(manifest_path)
