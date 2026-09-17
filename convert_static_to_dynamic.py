@@ -6,6 +6,39 @@ import uuid
 import csv
 from datetime import datetime
 
+# ── Presence-flag auto-migration ─────────────────────────────────────────────
+PRESENCE_THRESHOLD = 0.01  # mean-abs below this → hand absent
+
+def _infer_presence(feature_block: np.ndarray) -> int:
+    """Return 1 if the feature block looks like a real hand, 0 if all-zeros."""
+    return int(np.mean(np.abs(feature_block)) > PRESENCE_THRESHOLD)
+
+
+def _upgrade_to_149(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Silently upgrades a 147-column DataFrame (73 right | 73 left | label)
+    to a 149-column DataFrame (73 right | 1 right_flag | 73 left | 1 left_flag | label).
+    Called automatically whenever convert_static_to_dynamic encounters an old CSV.
+    """
+    right_block = df.iloc[:, 0:73].values.astype(float)
+    left_block  = df.iloc[:, 73:146].values.astype(float)
+    labels      = df.iloc[:, 146]
+
+    right_flags = np.array([_infer_presence(row) for row in right_block])
+    left_flags  = np.array([_infer_presence(row) for row in left_block])
+
+    new_df = pd.DataFrame(
+        np.hstack([
+            right_block,
+            right_flags.reshape(-1, 1),
+            left_block,
+            left_flags.reshape(-1, 1),
+        ])
+    )
+    new_df[148] = labels.values   # append label as last column
+    return new_df
+# ─────────────────────────────────────────────────────────────────────────────
+
 OUTPUT_DIR = "dynamic_dataset"
 SEQ_LEN = 30
 
@@ -101,13 +134,16 @@ def main():
             if not os.path.exists(csv_file):
                 print(f"Skipping {csv_file}, not found.")
                 continue
-                
+
             print(f"Processing {csv_file}...")
             df = pd.read_csv(csv_file, header=None).dropna()
 
-            if df.shape[1] != 149:
-                print(f"  SKIP {csv_file}: expected 149 columns (73 right + 1 flag + 73 left + 1 flag + label), got {df.shape[1]}.")
-                print(f"  Run backfill_presence_flags.py first to migrate old 147-col CSVs.")
+            if df.shape[1] == 147:
+                print(f"  AUTO-UPGRADE {csv_file}: old 147-col format detected — adding presence flags on the fly.")
+                df = _upgrade_to_149(df)
+
+            elif df.shape[1] != 149:
+                print(f"  SKIP {csv_file}: unexpected column count ({df.shape[1]}), expected 147 or 149.")
                 continue
 
             # Layout: 73 right | 1 right_flag | 73 left | 1 left_flag | label
