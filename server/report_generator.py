@@ -2,7 +2,7 @@
 into a formal incident-report paragraph.
 
 Kept behind an interface (open/closed principle) so the backend isn't
-locked to one provider — Gemini today, something else tomorrow — without
+locked to one provider — Groq today, something else tomorrow — without
 changing `server/main.py`.
 """
 from __future__ import annotations
@@ -29,17 +29,26 @@ class ReportGenerator(ABC):
     def generate(self, compiled_inputs: str) -> str: ...
 
 
-class GeminiReportGenerator(ReportGenerator):
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash"):
-        from google import genai
+class GroqReportGenerator(ReportGenerator):
+    def __init__(self, api_key: str, model: str = "llama-3.3-70b-versatile"):
+        from groq import Groq
 
-        self._client = genai.Client(api_key=api_key)
+        self._client = Groq(api_key=api_key)
         self._model = model
 
     def generate(self, compiled_inputs: str) -> str:
         prompt = REPORT_PROMPT_TEMPLATE.format(compiled_inputs=compiled_inputs)
-        response = self._client.models.generate_content(model=self._model, contents=prompt)
-        return response.text.strip()
+        chat_completion = self._client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            model=self._model,
+        )
+        content = chat_completion.choices[0].message.content
+        return content.strip() if content else ""
 
 
 class UnavailableReportGenerator(ReportGenerator):
@@ -48,4 +57,5 @@ class UnavailableReportGenerator(ReportGenerator):
     """
 
     def generate(self, compiled_inputs: str) -> str:
-        return "Report generation is not configured on the backend (missing GEMINI_API_KEY)."
+        return "Report generation is not configured on the backend (missing GROQ_API_KEY)."
+

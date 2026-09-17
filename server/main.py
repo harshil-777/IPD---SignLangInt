@@ -6,21 +6,24 @@ from __future__ import annotations
 
 import os
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 
 from sign_language.config import SEQUENCE
 
 from .gesture_predictor import GesturePredictorService
-from .report_generator import GeminiReportGenerator, ReportGenerator, UnavailableReportGenerator
+from .report_generator import GroqReportGenerator, ReportGenerator, UnavailableReportGenerator
 from .schemas import PredictRequest, PredictResponse, ReportRequest, ReportResponse
+
+load_dotenv()
 
 app = FastAPI(title="Sign Language Incident Report Backend")
 
 predictor = GesturePredictorService()
 
-_gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
+_groq_api_key = os.environ.get("GROQ_API_KEY", "")
 report_generator: ReportGenerator = (
-    GeminiReportGenerator(_gemini_api_key) if _gemini_api_key else UnavailableReportGenerator()
+    GroqReportGenerator(_groq_api_key) if _groq_api_key else UnavailableReportGenerator()
 )
 
 
