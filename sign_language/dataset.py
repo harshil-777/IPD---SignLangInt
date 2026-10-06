@@ -19,7 +19,13 @@ class SequenceDataset:
     def manifest_path(self) -> Path:
         return self.root_dir / "manifest.csv"
 
-    def save_sample(self, label: str, sequence: list[list[float]]) -> Path:
+    def save_sample(self, label: str, sequence: list[list[float]],
+                    source_type: str = "RECORDED") -> Path:
+        """Save a gesture sequence as a .npy file and append an entry to manifest.csv.
+
+        The manifest uses the 5-column schema expected by sync_dataset.py:
+            file_path, label, frames, source_type, created_at
+        """
         label_dir = self.root_dir / label
         label_dir.mkdir(parents=True, exist_ok=True)
 
@@ -32,8 +38,8 @@ class SequenceDataset:
         with open(manifest_path, "a", newline="") as f:
             writer = csv.writer(f)
             if is_new:
-                writer.writerow(["file_path", "label", "frames", "created_at"])
-            writer.writerow([str(sample_path), label, len(sequence), timestamp])
+                writer.writerow(["file_path", "label", "frames", "source_type", "created_at"])
+            writer.writerow([str(sample_path), label, len(sequence), source_type, timestamp])
 
         return sample_path
 

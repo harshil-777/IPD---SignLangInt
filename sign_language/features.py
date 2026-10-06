@@ -39,5 +39,25 @@ def extract_hand_features(landmark_coords: np.ndarray, config: FeatureConfig = F
 
 
 def landmarks_to_coords(hand_landmarks) -> np.ndarray:
-    """Convert a MediaPipe hand-landmark list into an (21, 3) array."""
-    return np.array([[lm.x, lm.y, lm.z] for lm in hand_landmarks], dtype=np.float32)
+    """Convert MediaPipe hand landmarks or a raw (N, 3) coordinate array
+    into a NumPy array of shape (N, 3). This keeps the feature pipeline
+    robust when tests or callers pass synthetic landmark data instead of the
+    exact MediaPipe object type.
+    """
+    if isinstance(hand_landmarks, np.ndarray):
+        arr = np.asarray(hand_landmarks, dtype=np.float32)
+        if arr.ndim == 2 and arr.shape[1] >= 3:
+            return arr[:, :3]
+
+    coords: list[list[float]] = []
+    for lm in hand_landmarks:
+        if hasattr(lm, "x") and hasattr(lm, "y") and hasattr(lm, "z"):
+            coords.append([float(lm.x), float(lm.y), float(lm.z)])
+        elif isinstance(lm, (list, tuple, np.ndarray)) and len(lm) >= 3:
+            coords.append([float(lm[0]), float(lm[1]), float(lm[2])])
+        else:
+            raise TypeError(f"Unsupported landmark entry: {type(lm)!r}")
+
+    if not coords:
+        raise ValueError("No landmark coordinates could be extracted from hand data.")
+    return np.array(coords, dtype=np.float32)

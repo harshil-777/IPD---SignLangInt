@@ -1,5 +1,7 @@
 # Sign Language Incident Report Interpreter
 
+For the detailed architecture, data contracts, training workflow, and AI-contributor guidance, see [AI_GUIDEBOOK.md](AI_GUIDEBOOK.md).
+
 A real-time sign language interpreter that recognizes dynamic hand gestures
 (fingerspelled letters, digits, and whole-word signs) from a webcam feed and
 walks a deaf complainant through a structured First Information Report (FIR)
@@ -50,8 +52,11 @@ pip install -r requirements.txt
 cp .env.example .env   # then fill in GROQ_API_KEY
 ```
 
-`hand_landmarker.task`, `gesture_lstm.keras`, and `label_encoder.pkl` must be
-present in the project root (already included).
+The project expects `hand_landmarker.task`, `gesture_lstm.keras`, and
+`label_encoder.pkl` in the project root. In the current checkout, only
+`gesture_lstm.keras` is present; obtain the matching hand landmarker asset and
+label encoder before running live capture and inference. See
+[AI_GUIDEBOOK.md](AI_GUIDEBOOK.md) for details.
 
 ## Running
 

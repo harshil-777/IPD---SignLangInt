@@ -9,7 +9,6 @@ from collections import deque
 import cv2
 import numpy as np
 
-from sign_language.camera import open_camera
 from sign_language.config import INFERENCE, PATHS, SEQUENCE
 from sign_language.fir import FIRWorkflow
 from sign_language.landmarker import HandLandmarkerService
@@ -42,13 +41,15 @@ class LiveInterpreterApp:
         self._generated_sentence = ""
 
     def run(self) -> None:
-        cap = open_camera(0)
+        cap = cv2.VideoCapture(0)
         if not cap.isOpened():
-            raise RuntimeError(
-                "Could not open webcam (index 0). It may be in use by another "
-                "app, blocked by OS camera privacy settings, or at a different "
-                "device index."
-            )
+            print("[ERROR] Could not open camera (index 0). Please check if your camera is enabled in Windows Privacy Settings or being used by another app.")
+            return
+
+        window_name = "Unified Sign Language System"
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        cv2.setWindowProperty(window_name, cv2.WND_PROP_TOPMOST, 1)
+
         try:
             with self._landmarker:
                 while cap.isOpened():
@@ -66,9 +67,12 @@ class LiveInterpreterApp:
                         self._sentence.text(last_n=6),
                         self._generated_sentence,
                     )
-                    cv2.imshow("Unified Sign Language System", frame)
-
-                    if self._handle_key(cv2.waitKey(1) & 0xFF):
+                    cv2.imshow(window_name, frame)
+                    key = cv2.waitKey(1) & 0xFF
+                    if self._handle_key(key):
+                        break
+                    # If user closed the window with the 'X' button
+                    if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
                         break
         finally:
             cap.release()

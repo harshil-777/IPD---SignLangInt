@@ -37,20 +37,53 @@ class HandLandmarkerService:
         """Build a single frame's feature vector from a detection result:
         right hand features followed by left hand features, zero-filled
         for any hand that wasn't detected.
+
+        MediaPipe handedness metadata can occasionally be missing, stale, or
+        arrive in a different order from the landmark list. We therefore
+        normalize the side label and fall back to the hand's x-position when
+        necessary so the model still receives the expected right/left layout.
         """
         features_per_hand = FEATURES.features_per_hand
         right = [0.0] * features_per_hand
         left = [0.0] * features_per_hand
 
-        if detection_result.hand_landmarks and detection_result.handedness:
-            for idx, hand_landmarks in enumerate(detection_result.hand_landmarks):
-                handedness = detection_result.handedness[idx][0].category_name
-                coords = landmarks_to_coords(hand_landmarks)
-                hand_features = extract_hand_features(coords)
+        hand_landmarks = getattr(detection_result, "hand_landmarks", None) or []
+        if not hand_landmarks:
+            return right + left
 
-                if handedness == "Right":
-                    right = hand_features
-                elif handedness == "Left":
-                    left = hand_features
+        handedness_data = getattr(detection_result, "handedness", None) or []
+
+        def normalize_handedness(value: object | None) -> str | None:
+            if value is None:
+                return None
+            if hasattr(value, "category_name"):
+                value = value.category_name
+            if isinstance(value, (list, tuple)) and value:
+                value = value[0]
+            value = str(value).strip().lower()
+            return value if value in {"right", "left"} else None
+
+        def infer_side_from_coords(coords: np.ndarray) -> str:
+            avg_x = float(np.mean(coords[:, 0]))
+            return "right" if avg_x >= 0.5 else "left"
+
+        for idx, hand_landmarks_item in enumerate(hand_landmarks):
+            coords = landmarks_to_coords(hand_landmarks_item)
+            hand_features = extract_hand_features(coords)
+
+            side = None
+            if idx < len(handedness_data):
+                candidate = handedness_data[idx]
+                if isinstance(candidate, (list, tuple)) and candidate:
+                    side = normalize_handedness(candidate[0])
+                else:
+                    side = normalize_handedness(candidate)
+            if side is None:
+                side = infer_side_from_coords(coords)
+
+            if side == "right":
+                right = hand_features
+            elif side == "left":
+                left = hand_features
 
         return right + left
