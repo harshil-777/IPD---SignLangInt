@@ -3,12 +3,13 @@ collector, the live app, and (indirectly) the augmentation pipeline.
 """
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import mediapipe as mp
 import numpy as np
 
-from .config import FEATURES, PATHS
+from .config import FEATURES, LANDMARKER, PATHS
 from .features import extract_hand_features, landmarks_to_coords
 
 
@@ -18,9 +19,26 @@ class HandLandmarkerService:
     features) used everywhere else in the pipeline.
     """
 
-    def __init__(self, model_path: Path = PATHS.hand_landmarker_task, num_hands: int = 2):
+    def __init__(
+        self,
+        model_path: Path = PATHS.hand_landmarker_task,
+        num_hands: int = LANDMARKER.num_hands,
+        min_hand_detection_confidence: float = LANDMARKER.min_hand_detection_confidence,
+        min_hand_presence_confidence: float = LANDMARKER.min_hand_presence_confidence,
+        min_tracking_confidence: float = LANDMARKER.min_tracking_confidence,
+        running_mode: mp.tasks.vision.RunningMode = mp.tasks.vision.RunningMode.VIDEO,
+    ):
+        self._running_mode = running_mode
+        self._last_timestamp_ms = -1
         base_options = mp.tasks.BaseOptions(model_asset_path=str(model_path))
-        options = mp.tasks.vision.HandLandmarkerOptions(base_options=base_options, num_hands=num_hands)
+        options = mp.tasks.vision.HandLandmarkerOptions(
+            base_options=base_options,
+            running_mode=running_mode,
+            num_hands=num_hands,
+            min_hand_detection_confidence=min_hand_detection_confidence,
+            min_hand_presence_confidence=min_hand_presence_confidence,
+            min_tracking_confidence=min_tracking_confidence,
+        )
         self._landmarker = mp.tasks.vision.HandLandmarker.create_from_options(options)
 
     def __enter__(self) -> "HandLandmarkerService":
@@ -29,8 +47,17 @@ class HandLandmarkerService:
     def __exit__(self, exc_type, exc, tb) -> None:
         self._landmarker.close()
 
-    def detect(self, rgb_frame: np.ndarray):
+    def detect(self, rgb_frame: np.ndarray, timestamp_ms: int | None = None):
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+        if self._running_mode == mp.tasks.vision.RunningMode.VIDEO:
+            if timestamp_ms is None:
+                t_now_ms = int(time.monotonic() * 1000)
+                if t_now_ms <= self._last_timestamp_ms:
+                    t_now_ms = self._last_timestamp_ms + 1
+                self._last_timestamp_ms = t_now_ms
+            else:
+                self._last_timestamp_ms = timestamp_ms
+            return self._landmarker.detect_for_video(mp_image, self._last_timestamp_ms)
         return self._landmarker.detect(mp_image)
 
     def extract_frame_features(self, detection_result) -> list[float]:

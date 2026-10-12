@@ -31,9 +31,18 @@ class FeatureConfig:
 
 
 @dataclass(frozen=True)
+class LandmarkerConfig:
+    num_hands: int = 2
+    min_hand_detection_confidence: float = 0.3
+    min_hand_presence_confidence: float = 0.3
+    min_tracking_confidence: float = 0.3
+
+
+@dataclass(frozen=True)
 class SequenceConfig:
     seq_len: int = 30
-    no_hand_reset_limit: int = 10
+    no_hand_reset_limit: int = 15
+    no_hand_hold_limit: int = 8
 
 
 @dataclass(frozen=True)
@@ -63,6 +72,7 @@ class ServerConfig:
 
 
 FEATURES = FeatureConfig()
+LANDMARKER = LandmarkerConfig()
 SEQUENCE = SequenceConfig()
 PATHS = ModelPaths()
 INFERENCE = InferenceConfig()

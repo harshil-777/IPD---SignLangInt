@@ -4,7 +4,11 @@ the user through the FIR questionnaire.
 """
 from __future__ import annotations
 
+import os
 from collections import deque
+
+# Suppress oneDNN noisy output
+os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")
 
 import cv2
 import numpy as np

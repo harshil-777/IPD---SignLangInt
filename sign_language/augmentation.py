@@ -42,8 +42,16 @@ def augment_sequence(sequence: np.ndarray) -> np.ndarray:
     right_coords = sequence[:, 0:coords_size].reshape(shape)
     left_coords = sequence[:, hand_size:hand_size + coords_size].reshape(shape)
 
-    new_right = _recompute_hand_features(_perturb_hand_sequence(right_coords))
-    new_left = _recompute_hand_features(_perturb_hand_sequence(left_coords))
+    if np.max(np.abs(right_coords)) < 1e-4:
+        new_right = np.zeros((sequence.shape[0], hand_size), dtype=np.float32)
+    else:
+        new_right = _recompute_hand_features(_perturb_hand_sequence(right_coords))
+
+    if np.max(np.abs(left_coords)) < 1e-4:
+        new_left = np.zeros((sequence.shape[0], hand_size), dtype=np.float32)
+    else:
+        new_left = _recompute_hand_features(_perturb_hand_sequence(left_coords))
+
     return np.concatenate([new_right, new_left], axis=1)
 
 

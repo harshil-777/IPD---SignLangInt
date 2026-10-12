@@ -16,10 +16,21 @@ CONTROLS_TEXT = "[ENTER] Generate | [N] Next | [B] Back | [C] Clear | [D]/[BACKS
 
 def draw_hand_landmarks(frame: np.ndarray, detection_result) -> None:
     h, w, _ = frame.shape
+    CONNECTIONS = [
+        (0, 1), (1, 2), (2, 3), (3, 4),
+        (0, 5), (5, 6), (6, 7), (7, 8),
+        (0, 9), (9, 10), (10, 11), (11, 12),
+        (0, 13), (13, 14), (14, 15), (15, 16),
+        (0, 17), (17, 18), (18, 19), (19, 20),
+        (5, 9), (9, 13), (13, 17),
+    ]
     for hand_landmarks in detection_result.hand_landmarks:
-        for landmark in hand_landmarks:
-            cx, cy = int(landmark.x * w), int(landmark.y * h)
-            cv2.circle(frame, (cx, cy), 3, (0, 255, 0), -1)
+        pts = [(int(lm.x * w), int(lm.y * h)) for lm in hand_landmarks]
+        for a, b in CONNECTIONS:
+            if a < len(pts) and b < len(pts):
+                cv2.line(frame, pts[a], pts[b], (80, 200, 80), 1, cv2.LINE_AA)
+        for px, py in pts:
+            cv2.circle(frame, (px, py), 3, (0, 255, 0), -1, cv2.LINE_AA)
 
 
 def draw_hud(frame: np.ndarray, question: str, prediction: str, current_input: str, generated_sentence: str) -> None:

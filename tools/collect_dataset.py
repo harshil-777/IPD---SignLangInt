@@ -14,10 +14,14 @@ Run with:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from collections import deque
 from pathlib import Path
+
+# Suppress oneDNN noisy output
+os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")
 
 # Add project root to path so it works when run from tools/ dir
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -87,7 +91,8 @@ def _draw_hand_landmarks(frame: np.ndarray, result) -> None:
     for hand_lms in result.hand_landmarks:
         pts = [(int(lm.x * w), int(lm.y * h)) for lm in hand_lms]
         for a, b in CONNECTIONS:
-            cv2.line(frame, pts[a], pts[b], (80, 200, 80), 1, cv2.LINE_AA)
+            if a < len(pts) and b < len(pts):
+                cv2.line(frame, pts[a], pts[b], (80, 200, 80), 1, cv2.LINE_AA)
         for px, py in pts:
             cv2.circle(frame, (px, py), 3, _GREEN, -1, cv2.LINE_AA)
 
@@ -95,7 +100,7 @@ def _draw_hand_landmarks(frame: np.ndarray, result) -> None:
 def _draw_hud(frame: np.ndarray, label: str, recording: bool,
               seq_len: int, seq_cap: int,
               samples_saved: int, target_samples: int,
-              hands_detected: bool, fps: float,
+              hands_detected: bool, is_holding: bool, fps: float,
               show_flash: bool) -> None:
     h, w = frame.shape[:2]
 
@@ -106,8 +111,8 @@ def _draw_hud(frame: np.ndarray, label: str, recording: bool,
     status_text  = "  REC" if recording else "  IDLE"
     _text(frame, status_text, (12, 28), scale=0.8, color=status_color, thickness=2)
     _text(frame, f"Label: {label}", (130, 28), scale=0.8, color=_YELLOW, thickness=2)
-    hand_color = _GREEN if hands_detected else _RED
-    hand_text  = "HAND OK" if hands_detected else "NO HAND"
+    hand_color = _GREEN if hands_detected else (_YELLOW if is_holding else _RED)
+    hand_text  = "HAND OK" if hands_detected else ("HAND HOLD" if is_holding else "NO HAND")
     _text(frame, hand_text, (w - 185, 28), scale=0.6, color=hand_color, thickness=1)
     _text(frame, f"FPS: {fps:.1f}", (w - 185, 55), scale=0.5, color=_GRAY)
     _text(frame, f"Saved: {samples_saved}" +
@@ -163,6 +168,7 @@ def collect(label: str, target_samples: int, dataset: SequenceDataset) -> None:
     sequence: list[list[float]] = []
     samples_saved  = 0
     no_hand_frames = 0
+    last_features: list[float] | None = None
     flash_until    = 0.0
     fps_q: deque[float] = deque(maxlen=30)
     t_prev = time.monotonic()
@@ -193,20 +199,27 @@ def collect(label: str, target_samples: int, dataset: SequenceDataset) -> None:
                 no_hand_frames = 0
                 if recording:
                     features = landmarker.extract_frame_features(result)
+                    last_features = features
                     sequence.append(features)
             else:
                 no_hand_frames += 1
+                # If hand is momentarily obscured or clenching into a fist,
+                # bridge the gap with the last known features so recording doesn't stall
+                if recording and last_features is not None and no_hand_frames <= SEQUENCE.no_hand_hold_limit:
+                    sequence.append(last_features)
 
             # Reset partial if hand disappears too long during recording
             if recording and no_hand_frames >= SEQUENCE.no_hand_reset_limit:
                 sequence.clear()
+                last_features = None
                 no_hand_frames = 0
 
             # Save completed sequence
-            if recording and len(sequence) == SEQUENCE.seq_len:
-                dataset.save_sample(label, sequence)
+            if recording and len(sequence) >= SEQUENCE.seq_len:
+                dataset.save_sample(label, sequence[:SEQUENCE.seq_len])
                 samples_saved += 1
                 sequence.clear()
+                last_features = None
                 flash_until = time.monotonic() + 0.6
                 print(f"  Saved sample {samples_saved}"
                       + (f"/{target_samples}" if target_samples > 0 else "")
@@ -216,15 +229,23 @@ def collect(label: str, target_samples: int, dataset: SequenceDataset) -> None:
                     print(f"\n[Collector] Target of {target_samples} samples reached — stopping.")
                     recording = False
 
+            is_holding = bool(
+                recording
+                and not hands_detected
+                and last_features is not None
+                and no_hand_frames <= SEQUENCE.no_hand_hold_limit
+            )
+
             _draw_hud(
                 frame,
                 label          = label,
                 recording      = recording,
-                seq_len        = len(sequence),
+                seq_len        = min(len(sequence), SEQUENCE.seq_len),
                 seq_cap        = SEQUENCE.seq_len,
                 samples_saved  = samples_saved,
                 target_samples = target_samples,
                 hands_detected = hands_detected,
+                is_holding     = is_holding,
                 fps            = fps,
                 show_flash     = time.monotonic() < flash_until,
             )
@@ -236,6 +257,7 @@ def collect(label: str, target_samples: int, dataset: SequenceDataset) -> None:
             if key == ord(" "):
                 recording = not recording
                 sequence.clear()
+                last_features = None
                 no_hand_frames = 0
                 print(f"  → {'RECORDING' if recording else 'PAUSED'}")
 
@@ -244,12 +266,15 @@ def collect(label: str, target_samples: int, dataset: SequenceDataset) -> None:
 
             elif key in (ord("r"), ord("R")):
                 sequence.clear()
+                last_features = None
                 no_hand_frames = 0
                 print("  → Sequence reset.")
 
             elif key in (ord("l"), ord("L")):
                 recording = False
                 sequence.clear()
+                last_features = None
+                no_hand_frames = 0
                 new_label = input("  Enter new label: ").strip().upper()
                 if new_label:
                     label = new_label
